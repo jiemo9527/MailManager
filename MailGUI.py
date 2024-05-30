@@ -12,7 +12,6 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext, font
 from tkinter import Listbox, SINGLE, END
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 import winsound
 from bs4 import BeautifulSoup
 import logging
@@ -20,6 +19,7 @@ from tkinter import ttk
 import pystray
 from PIL import Image
 import threading
+import settings
 
 # 创建系统托盘图标
 def create_image():
@@ -40,10 +40,16 @@ def hide_window():
     icon = pystray.Icon("test", image, "邮件管理", menu)
     threading.Thread(target=icon.run).start()
 
-
+# 配置日志记录器
+current_dir = os.path.dirname(os.path.abspath(__file__))
+log_file_path = os.path.join(current_dir, 'config', 'err.log')
+os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
 # 设置日志记录
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+logging.basicConfig(
+    filename=log_file_path,
+    level=logging.ERROR,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 # 全局变量用于保存查询结果
 saved_results = []
 
@@ -201,8 +207,10 @@ def fetch_emails(account, fetch_last_n=1):
 
         pop.quit()
     except Exception as e:
-        logging.error(f"处理邮箱 {account['email']} 时发生错误: {e}")
-        results.append(f"【发生错误:{e}】\n")
+        e = str(e)
+        if 'must be str, not None' not in e:
+            logging.error(f"处理邮箱 {account['email']} 时发生错误: {e}")
+            results.append(f"【发生错误:{e}】\n")
     return results[::-1]  # 反转结果列表，使最新的邮件在最上面
 def fetch_all_emails(email_accounts, write_to_file=False):
     results = []
@@ -321,14 +329,15 @@ def create_send_frame(root, font_style):
     height = int(root.winfo_height() * 0.85)
     frame.config(width=width, height=height)
 
-
 # 保存查询结果到本地文件
 def save_results_to_file(results):
     email_data = {}
     for result in results:
-        email, content = result.split(' ↓\n', 1)
-        email_data[email] = content.strip()
+        if ' ↓\n' in result:
+            email, content = result.split(' ↓\n', 1)
+            email_data[email] = content.strip()
 
+    os.makedirs('cache', exist_ok=True)
     with open('cache/email_contents.json', 'w', encoding='utf-8') as f:
         json.dump(email_data, f, ensure_ascii=False, indent=4)
 
@@ -447,10 +456,14 @@ def create_receive_frame(root, font_style):
 
         # 比较最新结果与本地文件内容
         for result in latest_results:
-            email, content = result.split(' ↓\n', 1)
-            content = content.strip()
-            if email not in local_results or local_results[email] != content:
-                new_results.append(result)
+            if ' ↓\n' in result:
+                email, content = result.split(' ↓\n', 1)
+                content = content.strip()
+                if email not in local_results or local_results[email] != content:
+                    new_results.append(result)
+            else:
+                # 处理没有正确格式的结果
+                logging.warning(f"结果格式不正确: {result}")
 
         # 更新输出框
         output_text.delete(1.0, tk.END)
@@ -460,10 +473,9 @@ def create_receive_frame(root, font_style):
             # 追加新邮件到本地文件
             append_new_results_to_file(new_results)
             # 播放提示音
-            winsound.PlaySound("alert.wav", winsound.SND_FILENAME)
+            winsound.PlaySound(settings.monitoringSound, winsound.SND_FILENAME)
         else:
-            output_text.insert(tk.END, "【无新邮件】")
-
+            output_text.insert(tk.END, "【无新邮件  (*^▽^*)!】")
     def start_monitoring():
         global monitoring
         if not monitoring:
@@ -474,7 +486,7 @@ def create_receive_frame(root, font_style):
         global monitoring
         if monitoring:
             display_unread_emails()
-            root.after(120000, monitor_emails)  # 2分钟执行一次
+            root.after(settings.monitoringTime, monitor_emails)  # 2分钟执行一次
 
     frame = tk.Frame(root)
     frame.grid(row=1, column=0, columnspan=2, pady=10, padx=10, sticky="ew")
@@ -587,10 +599,13 @@ def create_add_account_frame(root, font_style):
             messagebox.showerror("错误", f"保存邮箱账号信息时发生错误: {e}")
 
     def open_email_file():
-        email_file_path = 'config/emails.txt'
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        email_file_path = os.path.join(current_dir, 'config', 'emails.txt')
+
         if not os.path.exists(email_file_path):
+            os.makedirs(os.path.dirname(email_file_path), exist_ok=True)
             with open(email_file_path, 'w', encoding='utf-8') as f:
-                pass  # 创建一个空文件
+                pass # 创建一个空文件
 
         try:
             if os.name == 'nt':  # Windows
@@ -637,9 +652,9 @@ def main():
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
 
-    # 设置窗口大小为屏幕宽度的70%和高度的72%
-    window_width = int(screen_width * 0.70)
-    window_height = int(screen_height * 0.72)
+    # 设置窗口大小为屏幕宽度和高度
+    window_width = int(screen_width * settings.custom_width)
+    window_height = int(screen_height * settings.custom_height)
 
     # 设置窗口大小和位置
     root.geometry(
