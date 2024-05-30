@@ -196,7 +196,7 @@ def fetch_emails(account, fetch_last_n=1):
                         result = find_continuous_data(decoded_body)
                     if len(result) == 1:
                         verification_code = result[0]
-                        pyperclip.copy(verification_code)
+                        # pyperclip.copy(verification_code)
                         email_content += f"[{decoded_subject} 验证码: {verification_code} 已复制到剪切板]\n"
 
                     else:
