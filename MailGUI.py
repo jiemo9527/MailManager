@@ -21,24 +21,25 @@ from PIL import Image
 import threading
 import settings
 
+
 # 创建系统托盘图标
 def create_image():
     # 使用本地的icon文件
     return Image.open("resource/mailManger.ico")
+
 def on_quit(icon, item):
     icon.stop()
     root.quit()
-
 def show_window(icon, item):
     icon.stop()
     root.after(0, root.deiconify)
-
 def hide_window():
     root.withdraw()
     image = create_image()
     menu = (pystray.MenuItem('打开界面', show_window), pystray.MenuItem('退出', on_quit))
     icon = pystray.Icon("test", image, "邮件管理", menu)
     threading.Thread(target=icon.run).start()
+
 
 # 配置日志记录器
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -52,6 +53,7 @@ logging.basicConfig(
 )
 # 全局变量用于保存查询结果
 saved_results = []
+
 
 # 读取配置文件
 def read_email_accounts(file_path='config/emails.txt'):
@@ -77,6 +79,7 @@ def read_email_accounts(file_path='config/emails.txt'):
 
     return email_accounts
 
+
 # 收件服务器
 def get_pop_server(email):
     if email.endswith('@163.com'):
@@ -89,6 +92,7 @@ def get_pop_server(email):
         return 'pop-mail.outlook.com', 995
     else:
         raise ValueError(f"不支持的邮箱提供商: {email}")
+
 
 # 发件服务器
 def get_smtp_server(email):
@@ -104,7 +108,8 @@ def get_smtp_server(email):
     else:
         raise ValueError("不支持的邮箱服务提供商")
 
-#编码&转义
+
+# 编码&转义
 def decode_text(encoded_text):
     decoded_parts = []
     for part in decode_header(encoded_text):
@@ -134,6 +139,7 @@ def decode_payload(payload, charset):
 
     return decoded_text
 
+
 # 验证码匹配
 def find_continuous_data(string):
     # 匹配不以 # 开头的 4 到 6 位数字，末尾是空格或换行
@@ -142,7 +148,8 @@ def find_continuous_data2(string):
     # 匹配以 > 开头的 4 到 6 位数字，末尾是空格或换行
     return re.findall(r">(\d{4,6})(?=\s|$)", string)
 
-#收件处理过程
+
+# 收件处理过程
 def fetch_emails(account, fetch_last_n=1):
     results = []
     try:
@@ -173,7 +180,7 @@ def fetch_emails(account, fetch_last_n=1):
             email_content = email_header + email_info  # 初始化邮件内容
 
             # 关键字列表
-            keywords = ["验证码", "authentication code", "verification code", "code:", "OTP"]
+            keywords = ["验证码", "authentication code", "verification code", "OTP"]
 
             for part in msg.walk():
                 charset = part.get_content_charset()
@@ -181,7 +188,6 @@ def fetch_emails(account, fetch_last_n=1):
 
                 decoded_body = decode_payload(body, charset)
                 decoded_body = decoded_body.strip()
-
                 # 检查邮件内容是否包含任意一个关键字
                 if any(keyword in decoded_body for keyword in keywords):
                     if find_continuous_data2(decoded_body):
@@ -192,6 +198,7 @@ def fetch_emails(account, fetch_last_n=1):
                         verification_code = result[0]
                         pyperclip.copy(verification_code)
                         email_content += f"[{decoded_subject} 验证码: {verification_code} 已复制到剪切板]\n"
+
                     else:
                         soup = BeautifulSoup(decoded_body, 'html.parser')
                         text_content = soup.get_text()
@@ -231,104 +238,6 @@ def fetch_all_emails(email_accounts, write_to_file=False):
                 logging.error(f"处理邮箱 {account['email']} 时发生错误: {e}")
     return results
 
-
-# 发件界面
-def create_send_frame(root, font_style):
-    def send_email():
-        sender_email = sender_combobox.get().strip()
-        recipient_email = recipient_entry.get().strip()
-        subject = subject_entry.get().strip()
-        body = body_text.get("1.0", tk.END).strip()
-
-        if not sender_email or not recipient_email or not subject or not body:
-            messagebox.showerror("错误", "所有字段都是必填的。")
-            return
-
-        # 获取发件人邮箱的密码
-        sender_password = next((account['password'] for account in email_accounts if account['email'] == sender_email),
-                               None)
-        if not sender_password:
-            messagebox.showerror("错误", "未找到发件人邮箱的密码。")
-            return
-
-        # 获取SMTP服务器地址和端口
-        try:
-            smtp_server, smtp_port = get_smtp_server(sender_email)
-        except ValueError as e:
-            messagebox.showerror("错误", str(e))
-            return
-
-        # 发送邮件逻辑
-        try:
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-
-            # 创建邮件对象
-            msg = MIMEMultipart()
-            msg['From'] = sender_email
-            msg['To'] = recipient_email
-            msg['Subject'] = subject
-
-            # 添加邮件正文
-            msg.attach(MIMEText(body, 'plain'))
-
-            if smtp_port == 465:  # 使用SSL连接
-                with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
-                    server.login(sender_email, sender_password)
-                    server.sendmail(sender_email, recipient_email, msg.as_string())
-            else:  # 使用STARTTLS连接
-                with smtplib.SMTP(smtp_server, smtp_port) as server:
-                    server.starttls()
-                    server.login(sender_email, sender_password)
-                    server.sendmail(sender_email, recipient_email, msg.as_string())
-
-            messagebox.showinfo("成功", "邮件发送成功！")
-        except Exception as e:
-            logging.error(f"发送邮件时发生错误: {e}")
-            messagebox.showerror("错误", f"发送邮件时发生错误: {e}")
-
-    # 读取邮箱账户
-    email_accounts = read_email_accounts()
-    email_addresses = [account['email'] for account in email_accounts]
-
-    frame = tk.Frame(root)
-    frame.grid(row=1, column=0, columnspan=2, pady=10, padx=10, sticky="nsew")
-
-    sender_label = tk.Label(frame, text="发件人邮箱:", font=font_style)
-    sender_label.grid(row=0, column=0, padx=5, pady=5, sticky="e")
-
-    sender_combobox = ttk.Combobox(frame, values=email_addresses, font=font_style, state='readonly',width=30)
-    sender_combobox.grid(row=0, column=1, padx=5, pady=5, sticky="w")
-
-    recipient_label = tk.Label(frame, text="收件人邮箱:", font=font_style)
-    recipient_label.grid(row=1, column=0, padx=5, pady=5, sticky="e")
-    recipient_entry = tk.Entry(frame, width=40, font=font_style)
-    recipient_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
-
-    subject_label = tk.Label(frame, text="主题:", font=font_style)
-    subject_label.grid(row=2, column=0, padx=5, pady=5, sticky="e")
-    subject_entry = tk.Entry(frame, width=40, font=font_style)
-    subject_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
-
-    body_label = tk.Label(frame, text="正文:", font=font_style)
-    body_label.grid(row=3, column=0, padx=5, pady=5, sticky="ne")
-    body_text = scrolledtext.ScrolledText(frame, width=60, height=20, wrap=tk.WORD, font=font_style)
-    body_text.grid(row=3, column=1, padx=5, pady=5, sticky="nsew")
-
-    send_button = tk.Button(frame, text="发送邮件", command=send_email, font=font_style)
-    send_button.grid(row=4, column=1, padx=5, pady=10, sticky="e")
-
-    # 配置行列权重，使界面自适应调整
-    frame.grid_rowconfigure(3, weight=1)
-    frame.grid_columnconfigure(1, weight=1)
-
-    # 设置框架占窗口的85%
-    root.update_idletasks()
-    width = int(root.winfo_width() * 0.85)
-    height = int(root.winfo_height() * 0.85)
-    frame.config(width=width, height=height)
-
 # 保存查询结果到本地文件
 def save_results_to_file(results):
     email_data = {}
@@ -340,8 +249,6 @@ def save_results_to_file(results):
     os.makedirs('cache', exist_ok=True)
     with open('cache/email_contents.json', 'w', encoding='utf-8') as f:
         json.dump(email_data, f, ensure_ascii=False, indent=4)
-
-
 # 追加新邮件到本地文件
 def append_new_results_to_file(new_results):
     if not os.path.exists('cache/email_contents.json'):
@@ -357,7 +264,6 @@ def append_new_results_to_file(new_results):
 
     with open('cache/email_contents.json', 'w', encoding='utf-8') as f:
         json.dump(local_results, f, ensure_ascii=False, indent=4)
-
 
 # 收件界面
 def create_receive_frame(root, font_style):
@@ -384,6 +290,7 @@ def create_receive_frame(root, font_style):
                         results = fetch_emails(account, fetch_last_n=5)
                         for result in results:
                             output_text.insert(tk.END, result)
+
                         break
             else:
                 saved_results = fetch_all_emails(email_accounts, write_to_file=True)
@@ -409,6 +316,7 @@ def create_receive_frame(root, font_style):
                         output_text.insert(tk.END, result)
                 else:
                     messagebox.showerror("错误", "无法读取邮箱账户信息。")
+
             else:
                 email_entry.delete(0, tk.END)  # 清空输入框
                 email_entry.insert(0, selected_email)  # 将双击的邮箱填入输入框
@@ -476,6 +384,7 @@ def create_receive_frame(root, font_style):
             winsound.PlaySound(settings.monitoringSound, winsound.SND_FILENAME)
         else:
             output_text.insert(tk.END, "【无新邮件  (*^▽^*)!】")
+
     def start_monitoring():
         global monitoring
         if not monitoring:
@@ -541,6 +450,111 @@ def create_receive_frame(root, font_style):
             email_listbox.insert(END, account['email'])
     else:
         messagebox.showerror("错误", "无法读取邮箱账户信息。")
+
+# 发件界面
+def create_send_frame(root, font_style):
+
+    def send_email():
+        sender_email = sender_combobox.get().strip()
+        recipient_email = recipient_entry.get().strip()
+        subject = subject_entry.get().strip()
+        body = body_text.get("1.0", tk.END).strip()
+
+        if not sender_email or not recipient_email or not subject or not body:
+            messagebox.showerror("错误", "所有字段都是必填的。")
+            return
+
+        # 检查接收人邮箱格式
+        email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_regex, recipient_email):
+            messagebox.showerror("错误", "接收人邮箱格式不正确。")
+            return
+
+        # 获取发件人邮箱的密码
+        sender_password = next((account['password'] for account in email_accounts if account['email'] == sender_email),
+                               None)
+        if not sender_password:
+            messagebox.showerror("错误", "未找到发件人邮箱的密码。")
+            return
+
+        # 获取SMTP服务器地址和端口
+        try:
+            smtp_server, smtp_port = get_smtp_server(sender_email)
+        except ValueError as e:
+            messagebox.showerror("错误", str(e))
+            return
+
+        # 发送邮件逻辑
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+
+            # 创建邮件对象
+            msg = MIMEMultipart()
+            msg['From'] = sender_email
+            msg['To'] = recipient_email
+            msg['Subject'] = subject
+
+            # 添加邮件正文
+            msg.attach(MIMEText(body, 'plain'))
+
+            if smtp_port == 465:  # 使用SSL连接
+                with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+                    server.login(sender_email, sender_password)
+                    server.sendmail(sender_email, recipient_email, msg.as_string())
+            else:  # 使用STARTTLS连接
+                with smtplib.SMTP(smtp_server, smtp_port) as server:
+                    server.starttls()
+                    server.login(sender_email, sender_password)
+                    server.sendmail(sender_email, recipient_email, msg.as_string())
+
+            messagebox.showinfo("成功", "邮件发送成功！")
+        except Exception as e:
+            logging.error(f"发送邮件时发生错误: {e}")
+            messagebox.showerror("错误", f"发送邮件时发生错误: {e}")
+
+    # 读取邮箱账户
+    email_accounts = read_email_accounts()
+    email_addresses = [account['email'] for account in email_accounts]
+
+    frame = tk.Frame(root)
+    frame.grid(row=1, column=0, columnspan=2, pady=10, padx=10, sticky="nsew")
+
+    sender_label = tk.Label(frame, text="发件人邮箱:", font=font_style)
+    sender_label.grid(row=0, column=0, padx=5, pady=5, sticky="e")
+
+    sender_combobox = ttk.Combobox(frame, values=email_addresses, font=font_style, state='readonly', width=30)
+    sender_combobox.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+
+    recipient_label = tk.Label(frame, text="收件人邮箱:", font=font_style)
+    recipient_label.grid(row=1, column=0, padx=5, pady=5, sticky="e")
+    recipient_entry = tk.Entry(frame, width=40, font=font_style)
+    recipient_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+
+    subject_label = tk.Label(frame, text="主题:", font=font_style)
+    subject_label.grid(row=2, column=0, padx=5, pady=5, sticky="e")
+    subject_entry = tk.Entry(frame, width=40, font=font_style)
+    subject_entry.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+
+    body_label = tk.Label(frame, text="正文:", font=font_style)
+    body_label.grid(row=3, column=0, padx=5, pady=5, sticky="ne")
+    body_text = scrolledtext.ScrolledText(frame, width=60, height=20, wrap=tk.WORD, font=font_style)
+    body_text.grid(row=3, column=1, padx=5, pady=5, sticky="nsew")
+
+    send_button = tk.Button(frame, text="发送邮件", command=send_email, font=font_style)
+    send_button.grid(row=4, column=1, padx=5, pady=10, sticky="e")
+
+    # 配置行列权重，使界面自适应调整
+    frame.grid_rowconfigure(3, weight=1)
+    frame.grid_columnconfigure(1, weight=1)
+
+    # 设置框架占窗口的85%
+    root.update_idletasks()
+    width = int(root.winfo_width() * 0.85)
+    height = int(root.winfo_height() * 0.85)
+    frame.config(width=width, height=height)
+
 # 添加邮箱界面
 def create_add_account_frame(root, font_style):
     def save_accounts():
@@ -645,6 +659,7 @@ def create_add_account_frame(root, font_style):
     frame.grid_rowconfigure(1, weight=1)
     frame.grid_columnconfigure(0, weight=1)
 
+
 def main():
     global root
     root = tk.Tk()
@@ -710,6 +725,7 @@ def main():
     root.protocol("WM_DELETE_WINDOW", hide_window)
 
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()

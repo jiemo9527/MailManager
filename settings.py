@@ -6,3 +6,5 @@ custom_height=0.72
 monitoringTime=120000
 #监听提示音
 monitoringSound='resource/alert.wav'
+
+#fetch_last_n=1
