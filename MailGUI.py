@@ -210,7 +210,7 @@ def fetch_emails(account, fetch_last_n=1):
         e = str(e)
         if 'must be str, not None' not in e:
             logging.error(f"处理邮箱 {account['email']} 时发生错误: {e}")
-            results.append(f"【发生错误:{e}】\n")
+            results.append(f"{account['email']}【发生错误:{e}】\n")
     return results[::-1]  # 反转结果列表，使最新的邮件在最上面
 def fetch_all_emails(email_accounts, write_to_file=False):
     results = []
@@ -599,13 +599,14 @@ def create_add_account_frame(root, font_style):
             messagebox.showerror("错误", f"保存邮箱账号信息时发生错误: {e}")
 
     def open_email_file():
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        email_file_path = os.path.join(current_dir, 'config', 'emails.txt')
+        # 获取程序所在的路径
+        program_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+        email_file_path = os.path.join(program_dir, 'config', 'emails.txt')
 
         if not os.path.exists(email_file_path):
             os.makedirs(os.path.dirname(email_file_path), exist_ok=True)
             with open(email_file_path, 'w', encoding='utf-8') as f:
-                pass # 创建一个空文件
+                pass
 
         try:
             if os.name == 'nt':  # Windows
