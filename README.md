@@ -9,7 +9,7 @@
 - qq.com
 - 163.com
 - outlook.com(不建议使用，消息同步贼慢)
-- gmail.com（有bug）
+- gmail.com
 - ...
 
 ### 协议
@@ -21,3 +21,9 @@
 3. 如需读取全体最新，请点击展示最新未读；或启动监听服务接收语音提示（默认2分钟一次）
 4. 【发件】可直接选取邮箱列表之一，发件对象只允许唯一
 5. 最小化系统托盘
+
+Gmail使用需要，生成应用密码作为授权码：   
+启用此帐户上的两步验证。
+https://myaccount.google.com/signinoptions/two-step-verification
+启用两步验证后，您需要访问以下 URL：
+• https://security.google.com/settings/security/apppasswords
