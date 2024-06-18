@@ -201,12 +201,48 @@ def fetch_emails(account, fetch_last_n=1):
 
                     else:
                         soup = BeautifulSoup(decoded_body, 'html.parser')
-                        text_content = soup.get_text()
+                        # 删除所有的 <style> 和 <script> 标签
+                        for script_or_style in soup(['script', 'style']):
+                            script_or_style.decompose()
+                        # 用于存储最终的文本内容
+                        text_content = []
+
+                        # 遍历所有的标签
+                        for element in soup.descendants:
+                            if element.name == 'a' and element.get('href'):
+                                # 如果是 <a> 标签，提取链接和文本
+                                link_text = element.get_text()
+                                link_url = element['href']
+                                text_content.append(f'{link_text} ({link_url})')
+                            elif element.string:
+                                # 如果是其他标签，直接提取文本
+                                text_content.append(element.string)
+
+                        # 将所有文本内容合并成一个字符串
+                        text_content = ' '.join(text_content)
                         cleaned_text = re.sub(r'\s+', '', text_content)
                         email_content += cleaned_text + '\n'
                 else:
                     soup = BeautifulSoup(decoded_body, 'html.parser')
-                    text_content = soup.get_text()
+                    # 删除所有的 <style> 和 <script> 标签
+                    for script_or_style in soup(['script', 'style']):
+                        script_or_style.decompose()
+                    # 用于存储最终的文本内容
+                    text_content = []
+
+                    # 遍历所有的标签
+                    for element in soup.descendants:
+                        if element.name == 'a' and element.get('href'):
+                            # 如果是 <a> 标签，提取链接和文本
+                            link_text = element.get_text()
+                            link_url = element['href']
+                            text_content.append(f'{link_text} ({link_url})')
+                        elif element.string:
+                            # 如果是其他标签，直接提取文本
+                            text_content.append(element.string)
+
+                    # 将所有文本内容合并成一个字符串
+                    text_content = ' '.join(text_content)
                     cleaned_text = re.sub(r'\s+', '', text_content)
                     email_content += cleaned_text + '\n'
 
