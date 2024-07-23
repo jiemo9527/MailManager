@@ -344,7 +344,7 @@ def create_receive_frame(root, font_style):
                     output_text.see(idx)
                     count += 1
             output_text.tag_config('found', foreground='red', background='orange')
-        search_results_count.config(text=f"找到的结果: {count}")
+        search_results_count.config(text=f"结果数:{count}")
 
     def display_unread_emails():
         global saved_results
