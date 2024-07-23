@@ -189,62 +189,30 @@ def fetch_emails(account, fetch_last_n=1):
                 decoded_body = decode_payload(body, charset)
                 decoded_body = decoded_body.strip()
                 # 检查邮件内容是否包含任意一个关键字
-                if any(keyword in decoded_body for keyword in keywords):
-                    if find_continuous_data2(decoded_body):
-                        result = find_continuous_data2(decoded_body)
-                    else:
-                        result = find_continuous_data(decoded_body)
-                    if len(result) == 1:
-                        verification_code = result[0]
-                        # pyperclip.copy(verification_code)
-                        email_content += f"[{decoded_subject} 验证码: {verification_code} 已复制到剪切板]\n"
 
-                    else:
-                        soup = BeautifulSoup(decoded_body, 'html.parser')
-                        # 删除所有的 <style> 和 <script> 标签
-                        for script_or_style in soup(['script', 'style']):
-                            script_or_style.decompose()
-                        # 用于存储最终的文本内容
-                        text_content = []
+                soup = BeautifulSoup(decoded_body, 'html.parser')
+                # 删除所有的 <style> 和 <script> 标签
+                for script_or_style in soup(['script', 'style']):
+                    script_or_style.decompose()
+                # 用于存储最终的文本内容
+                text_content = []
 
-                        # 遍历所有的标签
-                        for element in soup.descendants:
-                            if element.name == 'a' and element.get('href'):
-                                # 如果是 <a> 标签，提取链接和文本
-                                link_text = element.get_text()
-                                link_url = element['href']
-                                text_content.append(f'{link_text} ({link_url})')
-                            elif element.string:
-                                # 如果是其他标签，直接提取文本
-                                text_content.append(element.string)
+                # 遍历所有的标签
+                for element in soup.descendants:
+                    if element.name == 'a' and element.get('href'):
+                        # 如果是 <a> 标签，提取链接和文本
+                        link_text = element.get_text()
+                        link_url = element['href']
+                        text_content.append(f'{link_text} ({link_url})')
+                    elif element.string:
+                        # 如果是其他标签，直接提取文本
+                        text_content.append(element.string)
 
-                        # 将所有文本内容合并成一个字符串
-                        text_content = ' '.join(text_content)
-                        cleaned_text = re.sub(r'\s+', '', text_content)
-                        email_content += cleaned_text + '\n'
-                else:
-                    soup = BeautifulSoup(decoded_body, 'html.parser')
-                    # 删除所有的 <style> 和 <script> 标签
-                    for script_or_style in soup(['script', 'style']):
-                        script_or_style.decompose()
-                    # 用于存储最终的文本内容
-                    text_content = []
+                # 将所有文本内容合并成一个字符串
+                text_content = ' '.join(text_content)
+                cleaned_text = re.sub(r'\s+', '', text_content)
+                email_content += cleaned_text + '\n'
 
-                    # 遍历所有的标签
-                    for element in soup.descendants:
-                        if element.name == 'a' and element.get('href'):
-                            # 如果是 <a> 标签，提取链接和文本
-                            link_text = element.get_text()
-                            link_url = element['href']
-                            text_content.append(f'{link_text} ({link_url})')
-                        elif element.string:
-                            # 如果是其他标签，直接提取文本
-                            text_content.append(element.string)
-
-                    # 将所有文本内容合并成一个字符串
-                    text_content = ' '.join(text_content)
-                    cleaned_text = re.sub(r'\s+', '', text_content)
-                    email_content += cleaned_text + '\n'
 
             results.append(email_content)
 
