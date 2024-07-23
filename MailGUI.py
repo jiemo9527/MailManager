@@ -273,6 +273,10 @@ def create_receive_frame(root, font_style):
 
     monitoring = False
 
+    # 变量保存搜索状态
+    search_index = 0
+    search_results = []
+
     def on_receive():
         global saved_results
         email_input = email_entry.get().strip()
@@ -291,7 +295,6 @@ def create_receive_frame(root, font_style):
                         results = fetch_emails(account, fetch_last_n=10)
                         for result in results:
                             output_text.insert(tk.END, result)
-
                         break
             else:
                 saved_results = fetch_all_emails(email_accounts, write_to_file=True)
@@ -330,8 +333,10 @@ def create_receive_frame(root, font_style):
                         break
 
     def find_in_text():
+        global search_index
         search = search_entry.get()
         output_text.tag_remove('found', '1.0', tk.END)
+        search_results.clear()  # 清空之前的搜索结果
         count = 0
         if search:
             idx = '1.0'
@@ -342,9 +347,24 @@ def create_receive_frame(root, font_style):
                     output_text.tag_add('found', idx, lastidx)
                     idx = lastidx
                     output_text.see(idx)
+                    search_results.append(idx)  # 记录匹配的索引
                     count += 1
             output_text.tag_config('found', foreground='red', background='orange')
         search_results_count.config(text=f"结果数:{count}")
+        search_index = 0  # 重置当前索引
+
+    def next_result():
+        global search_index
+        if search_results:
+            if search_index < len(search_results):
+                if search_index > 0:
+                    # 移除上一个匹配的标记
+                    output_text.tag_remove('found', search_results[search_index - 1], f"{search_results[search_index - 1]}+{len(search_entry.get())}c")
+                output_text.see(search_results[search_index])
+                output_text.tag_add('found', search_results[search_index], f"{search_results[search_index]}+{len(search_entry.get())}c")
+                search_index += 1
+            else:
+                search_index = 0  # 重置索引循环
 
     def display_unread_emails():
         global saved_results
@@ -399,6 +419,33 @@ def create_receive_frame(root, font_style):
             display_unread_emails()
             root.after(settings.monitoringTime, monitor_emails)  # 2分钟执行一次
 
+    # 搜索框相关
+    def toggle_search_frame(event=None):
+        if search_frame.winfo_ismapped():
+            search_frame.grid_forget()  # 隐藏搜索框
+        else:
+            search_frame.grid(row=0, column=1, padx=10, pady=10, sticky="ew")  # 显示搜索框
+            search_entry.focus_set()  # 聚焦到搜索输入框
+
+    # 绑定 Ctrl+F 快捷键
+    root.bind('<Control-f>', toggle_search_frame)
+
+    # 创建搜索框和按钮
+    search_frame = tk.Frame(root)
+
+    search_entry = tk.Entry(search_frame, width=20, font=font_style)  # 调整宽度
+    search_entry.grid(row=0, column=0, padx=5)
+
+    search_button = tk.Button(search_frame, text="查找", command=find_in_text, font=font_style, width=6)  # 设置宽度
+    search_button.grid(row=0, column=1, padx=5)
+
+    next_button = tk.Button(search_frame, text="下一个", command=next_result, font=font_style, width=6)  # 设置宽度
+    next_button.grid(row=0, column=2, padx=5)
+
+    search_results_count = tk.Label(search_frame, text="", font=font_style)
+    search_results_count.grid(row=0, column=3, padx=5)
+
+    # 创建主界面
     frame = tk.Frame(root)
     frame.grid(row=1, column=0, columnspan=2, pady=10, padx=10, sticky="ew")
 
@@ -411,25 +458,13 @@ def create_receive_frame(root, font_style):
     fetch_button = tk.Button(frame, text="读取邮箱", command=on_receive, font=font_style)
     fetch_button.grid(row=0, column=2, padx=5, pady=5, sticky="w")
 
-    search_label = tk.Label(frame, text="关键字查找:", font=font_style)
-    search_label.grid(row=0, column=3, padx=5, pady=5, sticky="w")
-
-    search_entry = tk.Entry(frame, width=30, font=font_style)
-    search_entry.grid(row=0, column=4, padx=5, pady=5, sticky="w")
-
-    search_button = tk.Button(frame, text="查找", command=find_in_text, font=font_style)
-    search_button.grid(row=0, column=5, padx=5, pady=5, sticky="w")
-
-    search_results_count = tk.Label(frame, text="", font=font_style)
-    search_results_count.grid(row=0, column=6, padx=5, pady=5, sticky="w")
-
     # 添加“展示最新未读”按钮
     unread_button = tk.Button(frame, text="展示最新未读", command=display_unread_emails, font=font_style)
-    unread_button.grid(row=0, column=7, padx=5, pady=5, sticky="w")
+    unread_button.grid(row=0, column=4, padx=5, pady=5, sticky="w")
 
     # 添加“启动监听服务”按钮
     monitor_button = tk.Button(frame, text="启动监听服务", command=start_monitoring, font=font_style)
-    monitor_button.grid(row=0, column=8, padx=5, pady=5, sticky="w")
+    monitor_button.grid(row=0, column=5, padx=5, pady=5, sticky="w")
 
     list_frame = tk.Frame(root)
     list_frame.grid(row=2, column=0, padx=10, pady=10, sticky="ns")
@@ -453,6 +488,9 @@ def create_receive_frame(root, font_style):
     else:
         messagebox.showerror("错误", "无法读取邮箱账户信息。")
 
+    # 初始时隐藏搜索框
+    search_frame.grid_forget()
+
 # 发件界面
 def create_send_frame(root, font_style):
 
@@ -473,8 +511,7 @@ def create_send_frame(root, font_style):
             return
 
         # 获取发件人邮箱的密码
-        sender_password = next((account['password'] for account in email_accounts if account['email'] == sender_email),
-                               None)
+        sender_password = next((account['password'] for account in email_accounts if account['email'] == sender_email), None)
         if not sender_password:
             messagebox.showerror("错误", "未找到发件人邮箱的密码。")
             return
@@ -556,6 +593,17 @@ def create_send_frame(root, font_style):
     width = int(root.winfo_width() * 0.85)
     height = int(root.winfo_height() * 0.85)
     frame.config(width=width, height=height)
+
+    # 自动修正邮箱格式
+    def fix_email_format(event):
+        email = recipient_entry.get().strip()
+        if email.endswith("com") and '.' not in email[:-3]:
+            # 在 "com" 前加上一个点
+            email = email[:-3] + '.' + email[-3:]
+            recipient_entry.delete(0, tk.END)
+            recipient_entry.insert(0, email)
+
+    recipient_entry.bind('<FocusOut>', fix_email_format)
 
 # 添加邮箱界面
 def create_add_account_frame(root, font_style):
