@@ -149,18 +149,20 @@ def find_continuous_data2(string):
     return re.findall(r">(\d{4,6})(?=\s|$)", string)
 
 
-# 收件处理过程
-def fetch_emails(account, fetch_last_n=1):
+def replace_multiple_newlines(text):
+    return re.sub(r'\s+', '', text.strip())
+
+def fetch_emails(account, fetch_last_n=2):
     results = []
     try:
         pop_server, port = get_pop_server(account['email'])
-        pop = poplib.POP3_SSL(pop_server, port)  # 使用正确的端口号
+        pop = poplib.POP3_SSL(pop_server, port)
 
         pop.user(account['email'])
         pop.pass_(account['password'])
 
         num_messages = len(pop.list()[1])
-        start_index = max(1, num_messages - fetch_last_n + 1)  # 确保索引不小于1
+        start_index = max(1, num_messages - fetch_last_n + 1)
 
         for i in range(start_index, num_messages + 1):
             response, lines, octets = pop.retr(i)
@@ -176,44 +178,40 @@ def fetch_emails(account, fetch_last_n=1):
             decoded_date = decode_text(date)
 
             email_header = f"{account['email']} ↓\n"
-            email_info = f"时间: {decoded_date}\n"  # 添加邮件时间信息
-            email_content = email_header + email_info  # 初始化邮件内容
-
-            # 关键字列表
-            keywords = ["验证码", "authentication code", "verification code", "OTP"]
+            email_info = f"时间: {decoded_date}\n"
+            email_content = email_header + email_info
+            email_content = email_content.strip()
 
             for part in msg.walk():
                 charset = part.get_content_charset()
                 body = part.get_payload(decode=True)
-
                 decoded_body = decode_payload(body, charset)
                 decoded_body = decoded_body.strip()
-                # 检查邮件内容是否包含任意一个关键字
-
                 soup = BeautifulSoup(decoded_body, 'html.parser')
-                # 删除所有的 <style> 和 <script> 标签
                 for script_or_style in soup(['script', 'style']):
                     script_or_style.decompose()
-                # 用于存储最终的文本内容
-                text_content = []
-
-                # 遍历所有的标签
-                for element in soup.descendants:
-                    if element.name == 'a' and element.get('href'):
-                        # 如果是 <a> 标签，提取链接和文本
-                        link_text = element.get_text()
-                        link_url = element['href']
-                        text_content.append(f'{link_text} ({link_url})')
-                    elif element.string:
-                        # 如果是其他标签，直接提取文本
-                        text_content.append(element.string)
-
-                # 将所有文本内容合并成一个字符串
-                text_content = ' '.join(text_content)
-                cleaned_text = re.sub(r'\s+', '', text_content)
-                email_content += cleaned_text + '\n'
 
 
+                body_tag = soup.find('body')
+                if body_tag:
+                    email_content += body_tag.get_text() + '\n'
+
+                    # 查找所有的 <a> 标签
+                    for a_tag in body_tag.find_all('a'):
+                        link_text = a_tag.get_text(strip=True)
+                        link_href = a_tag.get('href')
+                        if link_text and link_href:
+                            email_content += f"{link_text} ({link_href})\n"
+                else:
+                    email_content += soup.get_text() + '\n'
+                    for a_tag in soup.find_all('a'):
+                        link_text = a_tag.get_text(strip=True)
+                        link_href = a_tag.get('href')
+                        if link_text and link_href:
+                            email_content += f"{link_text} ({link_href})\n"
+            # 替换多个连续换行符为一个
+            email_content = replace_multiple_newlines(email_content)
+            email_content += '\n\n'
             results.append(email_content)
 
         pop.quit()
@@ -222,7 +220,7 @@ def fetch_emails(account, fetch_last_n=1):
         if 'must be str, not None' not in e:
             logging.error(f"处理邮箱 {account['email']} 时发生错误: {e}")
             results.append(f"{account['email']}【发生错误:{e}】\n")
-    return results[::-1]  # 反转结果列表，使最新的邮件在最上面
+    return results[::-1]
 def fetch_all_emails(email_accounts, write_to_file=False):
     results = []
     seen_emails = set()  # 用于跟踪已处理的邮箱地址
@@ -246,28 +244,14 @@ def fetch_all_emails(email_accounts, write_to_file=False):
 def save_results_to_file(results):
     email_data = {}
     for result in results:
-        if ' ↓\n' in result:
-            email, content = result.split(' ↓\n', 1)
+        if '↓' in result:
+            email, content = result.split('↓', 1)
             email_data[email] = content.strip()
 
     os.makedirs('cache', exist_ok=True)
     with open('cache/email_contents.json', 'w', encoding='utf-8') as f:
         json.dump(email_data, f, ensure_ascii=False, indent=4)
-# 追加新邮件到本地文件
-def append_new_results_to_file(new_results):
-    if not os.path.exists('cache/email_contents.json'):
-        save_results_to_file(new_results)
-        return
 
-    with open('cache/email_contents.json', 'r', encoding='utf-8') as f:
-        local_results = json.load(f)
-
-    for result in new_results:
-        email, content = result.split(' ↓\n', 1)
-        local_results[email] = content.strip()
-
-    with open('cache/email_contents.json', 'w', encoding='utf-8') as f:
-        json.dump(local_results, f, ensure_ascii=False, indent=4)
 
 # 收件界面
 def create_receive_frame(root, font_style):
@@ -291,7 +275,7 @@ def create_receive_frame(root, font_style):
             if email_input:
                 for account in email_accounts:
                     if account['email'] == email_input:
-                        results = fetch_emails(account, fetch_last_n=5)
+                        results = fetch_emails(account, fetch_last_n=10)
                         for result in results:
                             output_text.insert(tk.END, result)
 
@@ -327,7 +311,7 @@ def create_receive_frame(root, font_style):
                 email_accounts = read_email_accounts()
                 for account in email_accounts:
                     if account['email'] == selected_email:
-                        results = fetch_emails(account, fetch_last_n=5)
+                        results = fetch_emails(account, fetch_last_n=10)
                         for result in results:
                             output_text.insert(tk.END, result)
                         break
@@ -357,7 +341,7 @@ def create_receive_frame(root, font_style):
             return
 
         # 获取最新的未读邮件
-        latest_results = fetch_all_emails(email_accounts, write_to_file=False)
+        latest_results = fetch_all_emails(email_accounts, write_to_file=True)
         new_results = []
 
         # 读取本地 JSON 文件内容
@@ -368,8 +352,8 @@ def create_receive_frame(root, font_style):
 
         # 比较最新结果与本地文件内容
         for result in latest_results:
-            if ' ↓\n' in result:
-                email, content = result.split(' ↓\n', 1)
+            if ' ↓' in result:
+                email, content = result.split(' ↓', 1)
                 content = content.strip()
                 if email not in local_results or local_results[email] != content:
                     new_results.append(result)
@@ -383,7 +367,8 @@ def create_receive_frame(root, font_style):
             for result in new_results:
                 output_text.insert(tk.END, result)
             # 追加新邮件到本地文件
-            append_new_results_to_file(new_results)
+            save_results_to_file(new_results)
+
             # 播放提示音
             winsound.PlaySound(settings.monitoringSound, winsound.SND_FILENAME)
         else:
