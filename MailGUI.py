@@ -152,7 +152,7 @@ def find_continuous_data2(string):
 def replace_multiple_newlines(text):
     return re.sub(r'\s+', '', text.strip())
 
-def fetch_emails(account, fetch_last_n=2):
+def fetch_emails(account, fetch_last_n=1):
     results = []
     try:
         pop_server, port = get_pop_server(account['email'])
@@ -248,10 +248,23 @@ def save_results_to_file(results):
             email, content = result.split('↓', 1)
             email_data[email] = content.strip()
 
+    # 创建缓存目录
     os.makedirs('cache', exist_ok=True)
-    with open('cache/email_contents.json', 'w', encoding='utf-8') as f:
-        json.dump(email_data, f, ensure_ascii=False, indent=4)
 
+    # 尝试读取现有内容
+    file_path = 'cache/email_contents.json'
+    if os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            existing_data = json.load(f)
+    else:
+        existing_data = {}
+
+    # 合并新数据
+    existing_data.update(email_data)
+
+    # 写回合并后的内容
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(existing_data, f, ensure_ascii=False, indent=4)
 
 # 收件界面
 def create_receive_frame(root, font_style):
@@ -341,7 +354,7 @@ def create_receive_frame(root, font_style):
             return
 
         # 获取最新的未读邮件
-        latest_results = fetch_all_emails(email_accounts, write_to_file=True)
+        latest_results = fetch_all_emails(email_accounts, write_to_file=False)
         new_results = []
 
         # 读取本地 JSON 文件内容
@@ -352,8 +365,8 @@ def create_receive_frame(root, font_style):
 
         # 比较最新结果与本地文件内容
         for result in latest_results:
-            if ' ↓' in result:
-                email, content = result.split(' ↓', 1)
+            if '↓' in result:
+                email, content = result.split('↓', 1)
                 content = content.strip()
                 if email not in local_results or local_results[email] != content:
                     new_results.append(result)
